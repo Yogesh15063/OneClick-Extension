@@ -1,31 +1,21 @@
 {
   "manifest_version": 3,
-  "name": "ClickUp Task Viewer",
+  "name": "ClickUp Gmail Helper",
   "version": "1.0",
-  "description": "Shows ClickUp task details from Gmail CC",
+  "description": "Extract ClickUp Task IDs from Gmail and show task details.",
   "action": {
     "default_popup": "index.html",
-    "default_title": "ClickUp Task"
+    "default_title": "ClickUp Helper"
   },
-  "permissions": [
-    "activeTab",
-    "scripting"
-  ],
-  "host_permissions": [
-    "https://mail.google.com/*",
-    "http://localhost:5000/*"
-  ],
+  "permissions": ["storage", "activeTab", "scripting"],
+  "host_permissions": ["https://mail.google.com/*", "http://localhost:5000/*"],
   "background": {
     "service_worker": "background.js"
   },
   "content_scripts": [
     {
       "matches": ["https://mail.google.com/*"],
-      "js": ["contentScript.js"],
-      "run_at": "document_idle"
+      "js": ["content.js"]
     }
   ]
- 
 }
-
-
