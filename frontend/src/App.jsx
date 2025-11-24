@@ -4,36 +4,46 @@ export default function App() {
   const backend = "http://localhost:5000";
   const [connected, setConnected] = useState(false);
   const [user, setUser] = useState(null);
-  const [task, setTask] = useState(null);
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
 
-  // ✅ Listen for OAuth popup returning user info
+  const [tasks, setTasks] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  // ────────────────────────────────────────────────
+  // Listen for OAuth popup
+  // ────────────────────────────────────────────────
   useEffect(() => {
     const handler = (event) => {
       if (event.data?.clickup_user_id) {
         localStorage.setItem("clickup_user_id", event.data.clickup_user_id);
         localStorage.setItem("clickup_email", event.data.clickup_email);
+
         setConnected(true);
         setUser({ id: event.data.clickup_user_id, email: event.data.clickup_email });
       }
     };
+
     window.addEventListener("message", handler);
     return () => window.removeEventListener("message", handler);
   }, []);
 
-  // ✅ Check backend connection
+  // ────────────────────────────────────────────────
+  // Check backend connection (user already logged in)
+  // ────────────────────────────────────────────────
   useEffect(() => {
     const checkConnection = async () => {
       try {
         const res = await fetch(`${backend}/auth/clickup/user`);
         if (!res.ok) return;
+
         const data = await res.json();
         setConnected(true);
         setUser(data.user);
+
         localStorage.setItem("clickup_user_id", data.user.user_id);
       } catch {}
     };
+
     checkConnection();
   }, []);
 
@@ -41,35 +51,68 @@ export default function App() {
     window.open(`${backend}/auth/clickup`, "_blank", "width=600,height=700");
   };
 
-  const fetchTask = async () => {
+  // ────────────────────────────────────────────────
+  // Auto-fetch tasks as soon as popup opens
+  // ────────────────────────────────────────────────
+  useEffect(() => {
+    if (!connected) return;
+
+    setTimeout(fetchAllTasks, 300);
+  }, [connected]);
+
+  // ────────────────────────────────────────────────
+  // Fetch ALL tasks from multiple CC emails
+  // ────────────────────────────────────────────────
+  const fetchAllTasks = async () => {
     setLoading(true);
     setError("");
-    setTask(null);
+    setTasks([]);
 
     try {
       const userId = localStorage.getItem("clickup_user_id");
-      const { currentTaskId } = await chrome.storage.local.get("currentTaskId");
-      if (!userId || !currentTaskId) {
-        setError("Missing user or task ID");
+      const { currentTaskIds } = await chrome.storage.local.get("currentTaskIds");
+
+      if (!userId) {
+        setError("Not connected to ClickUp");
         setLoading(false);
         return;
       }
 
-      const res = await fetch(`${backend}/auth/clickup/task/${userId}/${currentTaskId}`);
-      const data = await res.json();
+      if (!currentTaskIds || currentTaskIds.length === 0) {
+        setError("No ClickUp task emails found in CC.");
+        setLoading(false);
+        return;
+      }
 
-      if (!res.ok) throw new Error(data.error || "Failed to fetch");
+      const results = [];
 
-      setTask(data.data);
-    } catch (err) {
-      setError(err.message);
+      for (const taskId of currentTaskIds) {
+        try {
+          const res = await fetch(`${backend}/auth/clickup/task/${userId}/${taskId}`);
+          const data = await res.json();
+
+          if (res.ok) results.push(data.data);
+        } catch {}
+      }
+
+      if (results.length === 0) {
+        setError("Failed to fetch tasks.");
+      } else {
+        setTasks(results);
+      }
+    } catch {
+      setError("Unexpected error occurred");
     } finally {
       setLoading(false);
     }
   };
 
-  const formatDate = (ts) => (ts ? new Date(parseInt(ts)).toLocaleDateString() : "No due date");
+  const formatDate = (ts) =>
+    ts ? new Date(parseInt(ts)).toLocaleDateString() : "No due date";
 
+  // ────────────────────────────────────────────────
+  // UI
+  // ────────────────────────────────────────────────
   return (
     <div style={{ fontFamily: "system-ui", width: 350, padding: 12 }}>
       <h3>ClickUp Helper</h3>
@@ -80,35 +123,32 @@ export default function App() {
         <div>✅ Connected as {user?.email}</div>
       )}
 
-      <button style={{ marginTop: 10 }} onClick={fetchTask} disabled={!connected || loading}>
-        {loading ? "Loading..." : "Fetch Task"}
-      </button>
+      {loading && <p>Loading tasks…</p>}
+      {error && <p style={{ color: "red", marginTop: 8 }}>{error}</p>}
 
-      {error && <p style={{ color: "red" }}>{error}</p>}
-
-      {task && (
+      {/* Render multiple tasks */}
+      {tasks.map((task) => (
         <div
+          key={task.id}
           style={{
             marginTop: 12,
-            background: "#f8f8f8",
-            padding: 10,
+            background: "#f7f7f7",
+            padding: 12,
             borderRadius: 6,
             fontSize: 13,
             lineHeight: 1.4,
+            border: "1px solid #e0e0e0",
           }}
         >
-          <h4 style={{ marginBottom: 4 }}>{task.name}</h4>
-          <p style={{ margin: 0, color: "#555" }}>
-            {task.description || "No description available"}
-          </p>
+          {/* ⭐ TITLE */}
+          <h4 style={{ margin: "0 0 6px 0" }}>{task.name}</h4>
 
-          <hr style={{ margin: "8px 0" }} />
-
-          <p>
+          {/* ⭐ STATUS */}
+          <p style={{ margin: "4px 0" }}>
             <b>Status:</b>{" "}
             <span
               style={{
-                background: task.status?.color || "#999",
+                background: task.status?.color || "#888",
                 color: "#fff",
                 padding: "2px 6px",
                 borderRadius: 4,
@@ -118,54 +158,25 @@ export default function App() {
             </span>
           </p>
 
-          <p>
-            <b>Priority:</b>{" "}
-            <span
-              style={{
-                background: task.priority?.color || "#ccc",
-                color: "#fff",
-                padding: "2px 6px",
-                borderRadius: 4,
-              }}
-            >
-              {task.priority?.priority || "N/A"}
-            </span>
-          </p>
-
-          <p>
+          {/* ⭐ DUE DATE */}
+          <p style={{ margin: "4px 0" }}>
             <b>Due Date:</b> {formatDate(task.due_date)}
           </p>
 
-          <p>
+          {/* ⭐ LIST */}
+          <p style={{ margin: "4px 0" }}>
             <b>List:</b> {task.list?.name || "—"}
           </p>
 
-          <p>
-            <b>Creator:</b> {task.creator?.username} ({task.creator?.email})
-          </p>
-
-          <p>
+          {/* ⭐ ASSIGNEES */}
+          <p style={{ margin: "4px 0" }}>
             <b>Assignees:</b>{" "}
             {task.assignees?.length
-              ? task.assignees.map((a) => `${a.username} (${a.email})`).join(", ")
-              : "None"}
+              ? task.assignees.map((a) => a.username).join(", ")
+              : "Nobody assigned"}
           </p>
 
-          {task.attachments?.length > 0 && (
-            <div>
-              <b>Attachments:</b>
-              <ul style={{ marginTop: 4, paddingLeft: 18 }}>
-                {task.attachments.map((att) => (
-                  <li key={att.id}>
-                    <a href={att.url} target="_blank" rel="noreferrer">
-                      {att.title}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
+          {/* ⭐ OPEN BUTTON */}
           <a
             href={task.url}
             target="_blank"
@@ -177,14 +188,15 @@ export default function App() {
               textAlign: "center",
               padding: "6px 0",
               borderRadius: 5,
-              marginTop: 8,
+              marginTop: 10,
               textDecoration: "none",
+              fontWeight: 600,
             }}
           >
             Open in ClickUp
           </a>
         </div>
-      )}
+      ))}
     </div>
   );
 }
