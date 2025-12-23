@@ -1,6 +1,6 @@
 chrome.runtime.onInstalled.addListener(() => {
   console.log("✅ ClickUp Extension installed");
-  chrome.storage.local.set({ BACKEND_URL: "http://localhost:5000" });
+  chrome.storage.local.set({ BACKEND_URL: "https://oneclick-extension.onrender.com" });
 });
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {

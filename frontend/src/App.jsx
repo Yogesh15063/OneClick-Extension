@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 
 export default function App() {
-  const backend = "http://localhost:5000";
+  const backend = "https://oneclick-extension.onrender.com";
   const [connected, setConnected] = useState(false);
   const [user, setUser] = useState(null);
 
